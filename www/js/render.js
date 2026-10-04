@@ -1,6 +1,6 @@
 // Canvas 描画（論理解像度 360x640 で描く）
 import { TILE, COLS, ROWS, MAP_Y, VIEW_W, VIEW_H, HUD_H, PANEL_Y, TOWERS, MAX_WAVE, towerStats } from './config.js';
-import { tileCenter } from './game.js';
+import { tileCenter, Game } from './game.js';
 
 const FONT = 'system-ui, -apple-system, "Hiragino Sans", sans-serif';
 
@@ -16,6 +16,7 @@ export function render(ctx, g) {
   drawHud(ctx, g);
   drawPanel(ctx, g);
   drawInfo(ctx, g);
+  drawDragGhost(ctx, g);
   if (g.paused) drawPaused(ctx);
 }
 
@@ -92,7 +93,9 @@ function drawSelection(ctx, g) {
     const t = g.selectedTower;
     rangeCircle(ctx, t.x, t.y, towerStats(t.type, t.level).range * TILE, '#ffffff');
   }
-  if (!g.selectedBuild) return;
+  const build = g.drag ? g.drag.type : g.selectedBuild;
+  const cell = g.drag ? g.drag.tile : g.hover;
+  if (!build) return;
   // 設置可能マスを薄く示す（タッチ端末向け）
   ctx.strokeStyle = 'rgba(255,255,255,0.25)';
   ctx.lineWidth = 1;
@@ -101,9 +104,9 @@ function drawSelection(ctx, g) {
       if (g.isBuildable(c, r)) ctx.strokeRect(c * TILE + 3.5, MAP_Y + r * TILE + 3.5, TILE - 7, TILE - 7);
     }
   }
-  if (g.hover) {
-    const { c, r } = g.hover;
-    const def = TOWERS[g.selectedBuild];
+  if (cell) {
+    const { c, r } = cell;
+    const def = TOWERS[build];
     const ok = g.isBuildable(c, r) && g.gold >= def.cost;
     ctx.fillStyle = ok ? 'rgba(255,255,255,0.3)' : 'rgba(229,57,53,0.45)';
     ctx.fillRect(c * TILE, MAP_Y + r * TILE, TILE, TILE);
@@ -569,11 +572,12 @@ function drawPaused(ctx) {
 
 // 選択中タワーの属性・特性を表示（未解放の特性はグレー）
 function drawInfo(ctx, g) {
-  const type = g.selectedTower ? g.selectedTower.type : g.selectedBuild;
+  const type = g.drag ? g.drag.type : g.selectedTower ? g.selectedTower.type : g.selectedBuild;
   if (!type) return;
   const def = TOWERS[type];
-  const level = g.selectedTower ? g.selectedTower.level : 0;
-  const y = PANEL_Y - 58;
+  const level = g.selectedTower && !g.drag ? g.selectedTower.level : 0;
+  // ドラッグ中は置き先が隠れないようにマップ上端に出す
+  const y = g.drag ? MAP_Y : PANEL_Y - 58;
   ctx.fillStyle = 'rgba(16,22,26,0.82)';
   ctx.fillRect(0, y, VIEW_W, 58);
   text(ctx, `【${def.element}】${def.name}`, 10, y + 11, { size: 12, align: 'left', color: def.color });
@@ -583,4 +587,15 @@ function drawInfo(ctx, g) {
     text(ctx, `Lv${i + 1}`, 10, y + 11 + i * 17, { size: 11, align: 'left', color: unlocked ? '#ffd54f' : '#78909c' });
     text(ctx, def.traits[i], 40, y + 11 + i * 17, { size: 12, align: 'left', weight: 'normal', color: unlocked ? '#ffffff' : '#78909c' });
   }
+}
+
+// ドラッグ中のキャラ（置けるマスならマスに吸着、置けなければ指の位置に半透明で）
+function drawDragGhost(ctx, g) {
+  const d = g.drag;
+  if (!d || !d.moved) return;
+  const ok = d.tile && g.isBuildable(d.tile.c, d.tile.r) && g.gold >= TOWERS[d.type].cost;
+  const p = ok ? tileCenter(d.tile.c, d.tile.r) : { x: d.x, y: d.touch ? d.y - Game.TOUCH_OFFSET : d.y };
+  ctx.globalAlpha = ok ? 0.85 : 0.5;
+  drawTower(ctx, { type: d.type, x: p.x, y: p.y, c: 0, r: 0, level: 1, cd: 0, angle: Math.PI / 2, hasTarget: false }, false);
+  ctx.globalAlpha = 1;
 }

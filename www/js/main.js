@@ -79,15 +79,20 @@ function toLocal(e) {
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (!running) return;
+  canvas.setPointerCapture(e.pointerId); // ドラッグ中に指が canvas 外へ出ても追従する
   const p = toLocal(e);
-  game.tap(p.x, p.y);
+  game.pointerDown(p.x, p.y, e.pointerType !== 'mouse');
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType !== 'mouse') return;
+  if (!running || (e.pointerType !== 'mouse' && !game.drag)) return;
   const p = toLocal(e);
-  game.setHover(p.x, p.y);
+  game.pointerMove(p.x, p.y);
 });
-canvas.addEventListener('pointerleave', () => game.setHover(null));
+canvas.addEventListener('pointerup', () => game.pointerUp());
+canvas.addEventListener('pointercancel', () => game.cancelDrag());
+canvas.addEventListener('pointerleave', () => {
+  if (!game.drag) game.setHover(null);
+});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && running && game.state === 'wave') game.paused = true;
 });
@@ -178,7 +183,7 @@ function showTitle() {
   const best = loadBest();
   showScreen(
     'ロード・ガード',
-    `敵の侵攻から ${MAX_WAVE} ウェーブ守り抜け！<br>下のタワーを選んで、草地をタップして設置。<br>タワーをタップで強化・売却。${best ? `<br><br>ベスト：ウェーブ ${best}` : ''}`,
+    `敵の侵攻から ${MAX_WAVE} ウェーブ守り抜け！<br>下のキャラを草地へドラッグして設置。<br>タワーをタップで強化・売却。${best ? `<br><br>ベスト：ウェーブ ${best}` : ''}`,
     [{ label: 'スタート', onClick: start }],
   );
 }

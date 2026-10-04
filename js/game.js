@@ -65,6 +65,7 @@ export class Game {
     this.selectedBuild = null;
     this.selectedTower = null;
     this.hover = null;
+    this.drag = null; // { type, x, y, sx, sy, touch, moved, tile }
     this.speed = 1;
     this.paused = false;
     this.reviveUsed = false;
@@ -379,7 +380,7 @@ export class Game {
       Object.keys(TOWERS).forEach((type, i) => {
         buttons.push({
           id: `tower:${type}`, x: 8 + i * 88, y: rowY, w: 80, h: rowH, tower: type,
-          selected: this.selectedBuild === type, disabled: this.gold < TOWERS[type].cost,
+          selected: this.selectedBuild === type || this.drag?.type === type, disabled: this.gold < TOWERS[type].cost,
         });
       });
     }
@@ -390,6 +391,58 @@ export class Game {
       disabled: this.state !== 'build',
     });
     return buttons;
+  }
+
+  buttonAt(x, y) {
+    return this.getButtons().find((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+  }
+
+  // ---- ドラッグ＆ドロップ設置 ----
+  // タッチ時は指で隠れないよう、指より少し上のマスを置き先にする
+  static TOUCH_OFFSET = 36;
+
+  pointerDown(x, y, touch) {
+    if (this.state === 'gameover' || this.state === 'victory') return;
+    const b = this.buttonAt(x, y);
+    if (b && b.tower && !b.disabled && !this.paused) {
+      this.drag = { type: b.tower, x, y, sx: x, sy: y, touch, moved: false, tile: null };
+      this.selectedTower = null;
+      return;
+    }
+    this.tap(x, y);
+  }
+
+  pointerMove(x, y) {
+    const d = this.drag;
+    if (!d) {
+      this.setHover(x, y);
+      return;
+    }
+    d.x = x;
+    d.y = y;
+    if (Math.hypot(x - d.sx, y - d.sy) > 8) d.moved = true;
+    const ty = d.touch ? y - Game.TOUCH_OFFSET : y;
+    d.tile = ty >= MAP_Y && ty < PANEL_Y && x >= 0 && x < COLS * TILE
+      ? { c: Math.floor(x / TILE), r: Math.floor((ty - MAP_Y) / TILE) }
+      : null;
+  }
+
+  pointerUp() {
+    const d = this.drag;
+    if (!d) return;
+    this.drag = null;
+    if (!d.moved) {
+      // ドラッグせずに離した＝タップ：従来どおり選択 → マスをタップで設置
+      this.press({ tower: d.type });
+      return;
+    }
+    if (d.tile && !this.paused && this.state !== 'gameover' && this.state !== 'victory') {
+      if (this.placeTower(d.type, d.tile.c, d.tile.r)) this.selectedBuild = null;
+    }
+  }
+
+  cancelDrag() {
+    this.drag = null;
   }
 
   tap(x, y) {

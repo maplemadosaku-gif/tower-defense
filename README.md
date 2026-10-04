@@ -10,6 +10,16 @@ python3 -m http.server 8765 --directory www
 
 ブラウザで http://localhost:8765 を開く（スマホ実機は同じ Wi-Fi で `http://<MacのIP>:8765`）。
 
+## 公開（GitHub Pages）
+
+- 公開URL: https://maplemadosaku-gif.github.io/tower-defense/
+- ソースは `develop` ブランチ、公開されるのは `www/` の中身だけを置いた `gh-pages` ブランチ（main は使わない）
+- 更新するときは develop にコミットしてから:
+
+```bash
+./tools/deploy.sh
+```
+
 ## 構成
 
 | ファイル | 役割 |
